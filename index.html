@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aria</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+
+    /* ── Rotate screen (portrait phones) ── */
+    #rotate-screen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000;
+      color: #fff;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      text-align: center;
+    }
+
+    #rotate-screen svg {
+      opacity: 0.7;
+      animation: spin 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(-15deg); }
+      to   { transform: rotate(15deg); }
+    }
+
+    #rotate-screen p {
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      opacity: 0.7;
+    }
+
+    @media (orientation: portrait) {
+      #rotate-screen { display: flex; }
+      #stage-wrap    { display: none; }
+    }
+
+    /* ── Stage wrapper: centres the 16:9 canvas ── */
+    #stage-wrap {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── The actual 16:9 canvas ── */
+    #stage {
+      position: relative;
+      background: #000;
+      cursor: crosshair;
+      /* size is set by JS to fill viewport while keeping 16:9 */
+    }
+
+    /* ── Each video clip ── */
+    .clip {
+      position: absolute;
+      cursor: pointer;
+      /* width / height / top / left set by JS */
+    }
+
+    .clip video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* fade in */
+    .clip { opacity: 0; transition: opacity 0.4s ease; }
+    .clip.visible { opacity: 1; }
+
+    /* ── Start overlay (browser autoplay policy) ── */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    #start-overlay span {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    #start-overlay.hidden { display: none; }
+
+    /* ── Hint ── */
+    #hint {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.25);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      pointer-events: none;
+      transition: opacity 1s;
+    }
+
+    #hint.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+
+<!-- Rotate prompt for portrait phones -->
+<div id="rotate-screen">
+  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="2" width="16" height="20" rx="2"/>
+    <line x1="12" y1="18" x2="12" y2="18.5"/>
+    <path d="M3 9 C3 4 7 1 12 1" stroke-dasharray="3 2"/>
+    <polyline points="12 1 15 4 9 4"/>
+  </svg>
+  <p>Поверните телефон горизонтально</p>
+</div>
+
+<!-- Start tap overlay -->
+<div id="start-overlay">
+  <span>tap to begin</span>
+</div>
+
+<!-- Canvas -->
+<div id="stage-wrap">
+  <div id="stage">
+    <div id="hint">click anywhere to add a layer</div>
+  </div>
+</div>
+
+<script>
+  // ─────────────────────────────────────────────
+  // CONFIGURATION — edit these two arrays
+  // ─────────────────────────────────────────────
+
+  // Path to your audio file (put it next to index.html or in /audio/)
+  const AUDIO_SRC = 'audio/aria.mp3';
+
+  // Ordered list of video files — edit filenames to match yours
+  // Put videos in a /videos/ folder next to index.html
+  const VIDEO_SEQUENCE = [
+    'videos/clip1.mp4',
+    'videos/clip2.mp4',
+    'videos/clip3.mp4',
+    'videos/clip4.mp4',
+    'videos/clip5.mp4',
+  ];
+
+  // Default clip size as fraction of stage dimensions
+  // 0.45 = 45% of stage width. Height is auto (keeps aspect ratio)
+  const CLIP_WIDTH_FRACTION  = 0.45;
+  const CLIP_HEIGHT_FRACTION = 0.45;
+
+  // ─────────────────────────────────────────────
+  // STAGE SIZING (keeps 16:9)
+  // ─────────────────────────────────────────────
+  const stage = document.getElementById('stage');
+
+  function resizeStage() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let w, h;
+    if (vw / vh > 16 / 9) {
+      h = vh; w = h * (16 / 9);
+    } else {
+      w = vw; h = w * (9 / 16);
+    }
+    stage.style.width  = w + 'px';
+    stage.style.height = h + 'px';
+  }
+
+  resizeStage();
+  window.addEventListener('resize', resizeStage);
+
+  // ─────────────────────────────────────────────
+  // AUDIO
+  // ─────────────────────────────────────────────
+  const audio = new Audio(AUDIO_SRC);
+  audio.loop = false;
+
+  // ─────────────────────────────────────────────
+  // STATE
+  // ─────────────────────────────────────────────
+  let sequenceIndex = 0;
+  let started = false;
+  const hint = document.getElementById('hint');
+  let hintHidden = false;
+
+  // ─────────────────────────────────────────────
+  // START OVERLAY
+  // ─────────────────────────────────────────────
+  const overlay = document.getElementById('start-overlay');
+  overlay.addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    audio.play().catch(() => {});
+    started = true;
+  });
+
+  // ─────────────────────────────────────────────
+  // CLICK ON STAGE → add next clip
+  // ─────────────────────────────────────────────
+  stage.addEventListener('click', (e) => {
+    if (!started) return;
+    if (e.target !== stage) return; // clicked on a clip — handled separately
+
+    if (sequenceIndex >= VIDEO_SEQUENCE.length) return; // sequence exhausted
+
+    // Hide hint after first click
+    if (!hintHidden) {
+      hint.classList.add('hidden');
+      hintHidden = true;
+    }
+
+    const stageW = stage.offsetWidth;
+    const stageH = stage.offsetHeight;
+
+    const clipW = stageW * CLIP_WIDTH_FRACTION;
+    const clipH = stageH * CLIP_HEIGHT_FRACTION;
+
+    // Click position relative to stage
+    const rect  = stage.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Centre the clip on click, clamped inside stage
+    let left = clickX - clipW / 2;
+    let top  = clickY - clipH / 2;
+    left = Math.max(0, Math.min(left, stageW - clipW));
+    top  = Math.max(0, Math.min(top,  stageH - clipH));
+
+    const src = VIDEO_SEQUENCE[sequenceIndex];
+    sequenceIndex++;
+
+    // Build clip element
+    const clip = document.createElement('div');
+    clip.className = 'clip';
+    clip.style.width  = clipW + 'px';
+    clip.style.height = clipH + 'px';
+    clip.style.left   = left + 'px';
+    clip.style.top    = top  + 'px';
+
+    const vid = document.createElement('video');
+    vid.src    = src;
+    vid.loop   = true;
+    vid.muted  = true;   // videos are muted; audio track is separate
+    vid.autoplay = true;
+    vid.playsInline = true;
+
+    clip.appendChild(vid);
+    stage.appendChild(clip);
+
+    // Fade in
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => clip.classList.add('visible'));
+    });
+
+    vid.play().catch(() => {});
+
+    // Click on clip → remove it
+    clip.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      clip.classList.remove('visible');
+      setTimeout(() => {
+        vid.pause();
+        clip.remove();
+      }, 400);
+    });
+  });
+</script>
+</body>
+</html>
