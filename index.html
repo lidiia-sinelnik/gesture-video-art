@@ -7,6 +7,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+
     #rotate-screen {
       display: none; position: fixed; inset: 0; z-index: 9999;
       background: #000; color: #fff; flex-direction: column;
@@ -14,17 +15,23 @@
     }
     #rotate-screen p { font-size: 1rem; letter-spacing: 0.1em; opacity: 0.6; }
     @media (orientation: portrait) { #rotate-screen { display: flex; } #stage-wrap { display: none; } }
+
     #stage-wrap { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
     #stage { position: relative; background: #000; cursor: crosshair; }
+
     #lora-window { position: absolute; cursor: pointer; z-index: 10; }
     #lora-window video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-    #vid-a { z-index: 1; opacity: 1; transition: opacity 0.5s; }
-    #vid-b { z-index: 2; opacity: 0; transition: opacity 0.5s; }
-    #vid-c { z-index: 3; opacity: 0; transition: opacity 0.5s; mix-blend-mode: screen; }
+
+    /* ── Faster Lora switch: 0.15s instead of 0.5s ── */
+    #vid-a { z-index: 1; opacity: 1; transition: opacity 0.15s ease; }
+    #vid-b { z-index: 2; opacity: 0; transition: opacity 0.15s ease; }
+    #vid-c { z-index: 3; opacity: 0; transition: opacity 0.15s ease; mix-blend-mode: screen; }
     #lora-window::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(255,255,255,0.08); pointer-events: none; }
+
     .clip { position: absolute; cursor: pointer; opacity: 0; transition: opacity 0.4s ease; z-index: 5; }
     .clip.visible { opacity: 1; }
     .clip video { display: block; width: 100%; height: 100%; object-fit: cover; }
+
     #start-overlay {
       position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.9);
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer;
@@ -32,21 +39,73 @@
     #start-overlay span { color: rgba(255,255,255,0.45); font-size: 0.8rem; letter-spacing: 0.25em; text-transform: uppercase; }
     #start-overlay small { color: rgba(255,255,255,0.2); font-size: 0.65rem; letter-spacing: 0.15em; }
     #start-overlay.hidden { display: none; }
+
     #hint { position: absolute; bottom: 14px; right: 18px; color: rgba(255,255,255,0.18); font-size: 0.62rem; letter-spacing: 0.13em; text-transform: uppercase; pointer-events: none; transition: opacity 1s; }
     #hint.hidden { opacity: 0; }
-    #left-menu { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 50; display: flex; flex-direction: column; gap: 8px; }
-    #left-menu button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.45); font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.3s, border-color 0.3s; padding: 0; line-height: 1; }
-    #left-menu button:hover { border-color: rgba(255,255,255,0.35); }
-    #left-menu button.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.4); }
-    .grayscale-mode video, .grayscale-mode #lora-window { filter: grayscale(1); }
+
+    /* ── Left menu ── */
+    #left-menu {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      z-index: 50; display: flex; flex-direction: column; align-items: center; gap: 14px;
+    }
+
+    /* Pause/play button */
+    #btn-pause {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.5);
+      color: rgba(255,255,255,0.55); font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s; padding: 0;
+    }
+    #btn-pause:hover { border-color: rgba(255,255,255,0.4); }
+    #btn-pause.paused { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.4); }
+
+    /* Subtitles button (kept as-is) */
+    #btn-subs {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.5);
+      color: rgba(255,255,255,0.45); font-size: 12px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, border-color 0.2s; padding: 0;
+    }
+    #btn-subs:hover { border-color: rgba(255,255,255,0.35); }
+    #btn-subs.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.4); }
+
+    /* ── Grayscale slider ── */
+    #bw-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    #bw-label {
+      color: rgba(255,255,255,0.25); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; user-select: none;
+    }
+    #bw-slider {
+      -webkit-appearance: slider-vertical;
+      appearance: slider-vertical;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 18px;
+      height: 70px;
+      cursor: pointer;
+      accent-color: rgba(255,255,255,0.5);
+      background: transparent;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    #bw-slider:hover { opacity: 1; }
+
+    .grayscale-active video,
+    .grayscale-active #lora-window { filter: var(--bw-filter, grayscale(0)); }
   </style>
 </head>
 <body>
+
 <div id="rotate-screen"><p>Поверните телефон горизонтально</p></div>
+
 <div id="start-overlay">
   <span>tap to begin</span>
   <small>left window — cycle · right side — add details</small>
 </div>
+
 <div id="stage-wrap">
   <div id="stage">
     <div id="lora-window">
@@ -55,9 +114,18 @@
       <video id="vid-c" loop muted playsinline></video>
     </div>
     <div id="hint">click to add details</div>
+
     <div id="left-menu">
-      <button id="btn-loop" title="Loop music">&#8635;</button>
-      <button id="btn-bw" title="Black & white">&#9681;</button>
+      <!-- 1. Pause/Play button -->
+      <button id="btn-pause" title="Pause / Play">&#9646;&#9646;</button>
+
+      <!-- 2. Grayscale slider (replaces B&W button) -->
+      <div id="bw-wrap">
+        <span id="bw-label">B&W</span>
+        <input id="bw-slider" type="range" min="0" max="100" value="0" title="Grayscale" />
+      </div>
+
+      <!-- 3. Subtitles placeholder -->
       <button id="btn-subs" title="Subtitles">T</button>
     </div>
   </div>
@@ -78,6 +146,7 @@
     c: BASE + '/euridice-v-ms-2.mp4',
   };
 
+  // Detail clips — looping sequence (restarts when exhausted)
   const DETAILS = [
     BASE + '/euridice-h-portrait-lora.mp4',
     BASE + '/euridice-h-cu-wave.mp4',
@@ -99,12 +168,16 @@
 
   const LORA_MARGIN   = 0.10;
   const LORA_WIDTH    = 0.22;
-  const DETAIL_W_FRAC = 0.42;
-  const DETAIL_H_FRAC = 0.48;
-  const DETAIL_GAP    = 10;
+
+  // ── Detail size: half of before ──
+  const DETAIL_W_FRAC = 0.21;
+  const DETAIL_H_FRAC = 0.24;
+
+  // Minimum pixel distance between clip centres (allows overlap, just not exact same spot)
+  const DETAIL_MIN_DIST = 24;
 
   // ═══════════════════════════════════════
-  // Cycle: 1 → 2 → 2+3 → 2 → 1 → 0 → 1...
+  // Lora cycle: 1→2→2+3→2→1→0→1...
   const LORA_CYCLE = [
     { a:1, b:0, c:0 },
     { a:0, b:1, c:0 },
@@ -114,37 +187,41 @@
     { a:0, b:0, c:0 },
   ];
 
-  let loraState = 0, detailIdx = 0, started = false, hintHidden = false;
-  let isLooping = false, isBW = false, isSubs = false;
+  let loraState = 0;
+  let detailIdx = 0;       // loops: resets to 0 when exhausted
+  let started   = false;
+  let isPaused  = false;
+  let hintHidden = false;
+  let isSubs    = false;
 
-  const stage   = document.getElementById('stage');
-  const loraWin = document.getElementById('lora-window');
-  const vidA    = document.getElementById('vid-a');
-  const vidB    = document.getElementById('vid-b');
-  const vidC    = document.getElementById('vid-c');
-  const hint    = document.getElementById('hint');
-  const overlay = document.getElementById('start-overlay');
-  const btnLoop = document.getElementById('btn-loop');
-  const btnBW   = document.getElementById('btn-bw');
-  const btnSubs = document.getElementById('btn-subs');
+  const stage    = document.getElementById('stage');
+  const loraWin  = document.getElementById('lora-window');
+  const vidA     = document.getElementById('vid-a');
+  const vidB     = document.getElementById('vid-b');
+  const vidC     = document.getElementById('vid-c');
+  const hint     = document.getElementById('hint');
+  const overlay  = document.getElementById('start-overlay');
+  const btnPause = document.getElementById('btn-pause');
+  const bwSlider = document.getElementById('bw-slider');
+  const btnSubs  = document.getElementById('btn-subs');
 
   vidA.src = LORA.a;
   vidB.src = LORA.b;
   vidC.src = LORA.c;
 
   // ── Timecode sync ──
-  const timecodeSyncedVideos = [vidA, vidB, vidC];
-  const timecodeSyncedDetails = new Set();
+  const loraVideos          = [vidA, vidB, vidC];
+  const timecodeSyncDetails = new Set();
 
-  function syncVideoToAudio(vid) {
+  function syncToAudio(vid) {
     if (Math.abs(vid.currentTime - audio.currentTime) > 0.3) {
       vid.currentTime = audio.currentTime;
     }
   }
-  function syncAllToTimecode() {
+  function syncAll() {
     if (!started) return;
-    timecodeSyncedVideos.forEach(v => { if (!v.paused) syncVideoToAudio(v); });
-    timecodeSyncedDetails.forEach(v => { if (!v.paused) syncVideoToAudio(v); });
+    loraVideos.forEach(v => { if (!v.paused) syncToAudio(v); });
+    timecodeSyncDetails.forEach(v => { if (!v.paused) syncToAudio(v); });
   }
 
   // ── Stage sizing ──
@@ -156,40 +233,39 @@
     stage.style.height = h + 'px';
     loraWin.style.top    = (h * LORA_MARGIN) + 'px';
     loraWin.style.left   = (w * LORA_MARGIN) + 'px';
-    loraWin.style.width  = (w * LORA_WIDTH) + 'px';
+    loraWin.style.width  = (w * LORA_WIDTH)  + 'px';
     loraWin.style.height = (h * (1 - 2 * LORA_MARGIN)) + 'px';
   }
   resizeStage();
   window.addEventListener('resize', resizeStage);
 
-  // ── Audio ──
+  // ── Audio — always loops ──
   const audio = new Audio(AUDIO_SRC);
-  audio.addEventListener('timeupdate', syncAllToTimecode);
-  audio.addEventListener('play', () => {
-    timecodeSyncedVideos.forEach(v => {
-      v.currentTime = audio.currentTime;
-      if (parseFloat(v.style.opacity) > 0) v.play().catch(()=>{});
-    });
-    timecodeSyncedDetails.forEach(v => { v.currentTime = audio.currentTime; v.play().catch(()=>{}); });
-  });
+  audio.loop = false; // handled manually so we can sync videos on loop
+
+  audio.addEventListener('timeupdate', syncAll);
+
   audio.addEventListener('ended', () => {
-    if (isLooping) {
-      audio.currentTime = 0;
-      audio.play().catch(()=>{});
-      timecodeSyncedVideos.forEach(v => { v.currentTime = 0; });
-      timecodeSyncedDetails.forEach(v => { v.currentTime = 0; });
-    }
+    // Restart everything in sync
+    audio.currentTime = 0;
+    audio.play().catch(()=>{});
+    loraVideos.forEach(v => { v.currentTime = 0; });
+    timecodeSyncDetails.forEach(v => { v.currentTime = 0; });
+    applyLoraState(loraState); // re-trigger play on active ones
   });
 
   // ── Lora state ──
   function applyLoraState(idx) {
     const s = LORA_CYCLE[idx];
-    vidA.style.opacity = s.a; if (s.a) { vidA.currentTime = audio.currentTime; vidA.play().catch(()=>{}); } else vidA.pause();
-    vidB.style.opacity = s.b; if (s.b) { vidB.currentTime = audio.currentTime; vidB.play().catch(()=>{}); } else vidB.pause();
-    vidC.style.opacity = s.c; if (s.c) { vidC.currentTime = audio.currentTime; vidC.play().catch(()=>{}); } else vidC.pause();
+    vidA.style.opacity = s.a;
+    vidB.style.opacity = s.b;
+    vidC.style.opacity = s.c;
+    if (s.a) { vidA.currentTime = audio.currentTime; vidA.play().catch(()=>{}); } else vidA.pause();
+    if (s.b) { vidB.currentTime = audio.currentTime; vidB.play().catch(()=>{}); } else vidB.pause();
+    if (s.c) { vidC.currentTime = audio.currentTime; vidC.play().catch(()=>{}); } else vidC.pause();
   }
 
-  // ── Start ──
+  // ── Start overlay ──
   overlay.addEventListener('click', () => {
     overlay.classList.add('hidden');
     audio.play().catch(()=>{});
@@ -205,75 +281,110 @@
     applyLoraState(loraState);
   });
 
-  // ── Detail clip placement ──
-  const placedClips = [];
-  function hasOverlap(left, top, w, h) {
-    for (const c of placedClips) {
-      const noOverlap = left+w+DETAIL_GAP<=c.left || c.left+c.w+DETAIL_GAP<=left || top+h+DETAIL_GAP<=c.top || c.top+c.h+DETAIL_GAP<=top;
-      if (!noOverlap) return true;
-    }
-    return false;
-  }
-  function nudgePosition(left, top, w, h, rz, sw, sh) {
-    const offsets = [0, 30, -30, 60, -60, 90, -90, 120, -120];
-    for (const dx of offsets) for (const dy of offsets) {
-      const nl = Math.max(rz, Math.min(left+dx, sw-w));
-      const nt = Math.max(0, Math.min(top+dy, sh-h));
-      if (!hasOverlap(nl, nt, w, h)) return { left: nl, top: nt };
-    }
-    return { left, top };
+  // ── Placed clip centres (for minimum-distance check) ──
+  const placedCentres = [];
+
+  function tooClose(cx, cy) {
+    return placedCentres.some(([px, py]) =>
+      Math.hypot(cx - px, cy - py) < DETAIL_MIN_DIST
+    );
   }
 
+  function findNearby(cx, cy, rightZoneStart, sw, sh, clipW, clipH) {
+    // Try small offsets to find a non-too-close spot
+    const steps = [0, 28, -28, 56, -56, 84, -84];
+    for (const dx of steps) for (const dy of steps) {
+      const ncx = cx + dx, ncy = cy + dy;
+      const nl = Math.max(rightZoneStart, Math.min(ncx - clipW/2, sw - clipW));
+      const nt = Math.max(0, Math.min(ncy - clipH/2, sh - clipH));
+      const acx = nl + clipW/2, acy = nt + clipH/2;
+      if (!tooClose(acx, acy)) return { left: nl, top: nt, cx: acx, cy: acy };
+    }
+    // fallback: place anyway
+    const fl = Math.max(rightZoneStart, Math.min(cx - clipW/2, sw - clipW));
+    const ft = Math.max(0, Math.min(cy - clipH/2, sh - clipH));
+    return { left: fl, top: ft, cx: fl + clipW/2, cy: ft + clipH/2 };
+  }
+
+  // ── Stage click → add detail clip ──
   stage.addEventListener('click', (e) => {
     if (!started || e.target !== stage) return;
-    const rect  = stage.getBoundingClientRect();
+
+    const rect   = stage.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
     const sw = stage.offsetWidth, sh = stage.offsetHeight;
     const rightZoneStart = sw * LORA_MARGIN + sw * LORA_WIDTH + 8;
-    if (clickX < rightZoneStart || detailIdx >= DETAILS.length) return;
+
+    if (clickX < rightZoneStart) return;
     if (!hintHidden) { hint.classList.add('hidden'); hintHidden = true; }
+
+    // Sequence loops
+    if (detailIdx >= DETAILS.length) detailIdx = 0;
 
     const clipW = (sw - rightZoneStart) * DETAIL_W_FRAC;
     const clipH = sh * DETAIL_H_FRAC;
-    let left = Math.max(rightZoneStart, Math.min(clickX - clipW/2, sw - clipW));
-    let top  = Math.max(0, Math.min(clickY - clipH/2, sh - clipH));
-    const pos = nudgePosition(left, top, clipW, clipH, rightZoneStart, sw, sh);
-    left = pos.left; top = pos.top;
+    const pos   = findNearby(clickX, clickY, rightZoneStart, sw, sh, clipW, clipH);
+
+    placedCentres.push([pos.cx, pos.cy]);
 
     const src  = DETAILS[detailIdx++];
     const clip = document.createElement('div');
     clip.className = 'clip';
-    clip.style.cssText = `width:${clipW}px;height:${clipH}px;left:${left}px;top:${top}px;`;
+    clip.style.cssText = `width:${clipW}px;height:${clipH}px;left:${pos.left}px;top:${pos.top}px;`;
+
     const vid = document.createElement('video');
     vid.src = src; vid.loop = true; vid.muted = true; vid.autoplay = true; vid.playsInline = true;
-    clip.appendChild(vid); stage.appendChild(clip);
+    clip.appendChild(vid);
+    stage.appendChild(clip);
+
     requestAnimationFrame(() => requestAnimationFrame(() => clip.classList.add('visible')));
     vid.play().catch(()=>{});
 
-    const clipRecord = { left, top, w: clipW, h: clipH };
-    placedClips.push(clipRecord);
     clip.addEventListener('click', (ev) => {
       ev.stopPropagation();
       clip.classList.remove('visible');
-      timecodeSyncedDetails.delete(vid);
-      placedClips.splice(placedClips.indexOf(clipRecord), 1);
+      timecodeSyncDetails.delete(vid);
+      const i = placedCentres.indexOf(pos.cx); // rough cleanup
+      placedCentres.splice(i, 1);
       setTimeout(() => { vid.pause(); clip.remove(); }, 400);
     });
   });
 
-  // ── Buttons ──
-  btnLoop.addEventListener('click', (e) => {
+  // ── Button: Pause / Play ──
+  btnPause.addEventListener('click', (e) => {
     e.stopPropagation();
-    isLooping = !isLooping;
-    btnLoop.classList.toggle('active', isLooping);
+    if (!started) return;
+    isPaused = !isPaused;
+    if (isPaused) {
+      audio.pause();
+      loraVideos.forEach(v => v.pause());
+      timecodeSyncDetails.forEach(v => v.pause());
+      btnPause.innerHTML = '&#9654;'; // play triangle
+      btnPause.classList.add('paused');
+    } else {
+      audio.play().catch(()=>{});
+      applyLoraState(loraState);
+      timecodeSyncDetails.forEach(v => v.play().catch(()=>{}));
+      btnPause.innerHTML = '&#9646;&#9646;'; // pause bars
+      btnPause.classList.remove('paused');
+    }
   });
-  btnBW.addEventListener('click', (e) => {
+
+  // ── Grayscale slider ──
+  bwSlider.addEventListener('input', (e) => {
     e.stopPropagation();
-    isBW = !isBW;
-    stage.classList.toggle('grayscale-mode', isBW);
-    btnBW.classList.toggle('active', isBW);
+    const val = e.target.value; // 0–100
+    stage.style.setProperty('--bw-filter', `grayscale(${val}%)`);
+    if (val > 0) {
+      stage.classList.add('grayscale-active');
+    } else {
+      stage.classList.remove('grayscale-active');
+    }
   });
+  bwSlider.addEventListener('click', (e) => e.stopPropagation());
+
+  // ── Button: Subtitles ──
   btnSubs.addEventListener('click', (e) => {
     e.stopPropagation();
     isSubs = !isSubs;
