@@ -7,41 +7,75 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+
     #rotate-screen {
       display: none; position: fixed; inset: 0; z-index: 9999;
       background: #000; color: #fff; flex-direction: column;
       align-items: center; justify-content: center; gap: 24px; text-align: center;
     }
     #rotate-screen p { font-size: 1rem; letter-spacing: 0.1em; opacity: 0.6; }
-    @media (orientation: portrait) { #rotate-screen { display: flex; } #stage-wrap { display: none; } }
+    @media (orientation: portrait) {
+      #rotate-screen { display: flex; }
+      #stage-wrap    { display: none; }
+    }
+
     #stage-wrap { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
     #stage { position: relative; background: #000; cursor: crosshair; }
+
     #lora-window { position: absolute; cursor: pointer; z-index: 10; }
     #lora-window video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
     #vid-a { z-index: 1; opacity: 1; transition: opacity 0.5s; }
     #vid-b { z-index: 2; opacity: 0; transition: opacity 0.5s; }
     #vid-c { z-index: 3; opacity: 0; transition: opacity 0.5s; mix-blend-mode: screen; }
     #lora-window::after { content: ''; position: absolute; inset: 0; border: 1px solid rgba(255,255,255,0.08); pointer-events: none; }
+
     .clip { position: absolute; cursor: pointer; opacity: 0; transition: opacity 0.4s ease; z-index: 5; }
     .clip.visible { opacity: 1; }
     .clip video { display: block; width: 100%; height: 100%; object-fit: cover; }
+
     #start-overlay {
       position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.9);
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; cursor: pointer;
     }
     #start-overlay span { color: rgba(255,255,255,0.45); font-size: 0.8rem; letter-spacing: 0.25em; text-transform: uppercase; }
     #start-overlay small { color: rgba(255,255,255,0.2); font-size: 0.65rem; letter-spacing: 0.15em; }
     #start-overlay.hidden { display: none; }
-    #hint { position: absolute; bottom: 14px; right: 18px; color: rgba(255,255,255,0.18); font-size: 0.62rem; letter-spacing: 0.13em; text-transform: uppercase; pointer-events: none; transition: opacity 1s; }
+
+    #hint {
+      position: absolute; bottom: 14px; right: 18px;
+      color: rgba(255,255,255,0.18); font-size: 0.62rem;
+      letter-spacing: 0.13em; text-transform: uppercase;
+      pointer-events: none; transition: opacity 1s;
+    }
     #hint.hidden { opacity: 0; }
+
+    #left-menu {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      z-index: 50; display: flex; flex-direction: column; gap: 8px;
+    }
+    #left-menu button {
+      width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.45); font-size: 12px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.3s, border-color 0.3s;
+      padding: 0; line-height: 1;
+    }
+    #left-menu button:hover { border-color: rgba(255,255,255,0.35); }
+    #left-menu button.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.4); }
+
+    .grayscale-mode video, .grayscale-mode #lora-window { filter: grayscale(1); }
   </style>
 </head>
 <body>
+
 <div id="rotate-screen"><p>Поверните телефон горизонтально</p></div>
+
 <div id="start-overlay">
   <span>tap to begin</span>
   <small>left window — cycle · right side — add details</small>
 </div>
+
 <div id="stage-wrap">
   <div id="stage">
     <div id="lora-window">
@@ -50,38 +84,44 @@
       <video id="vid-c" loop muted playsinline></video>
     </div>
     <div id="hint">click to add details</div>
+    <div id="left-menu">
+      <button id="btn-loop" title="Loop music">&#8635;</button>
+      <button id="btn-bw" title="Black & white">&#9681;</button>
+      <button id="btn-subs" title="Subtitles">T</button>
+    </div>
   </div>
 </div>
+
 <script>
-  const BASE = 'https://pub-7bc59aab15f746398bbd7263fbe1babc.r2.dev';
-  const AUDIO_SRC = BASE + '/aria.mp3';
+  // ═══════════════════════════════════════
+  // CONFIGURATION
+  // ═══════════════════════════════════════
+
+  const AUDIO_SRC = 'audio/aria.mp3';
+
   const LORA = {
-    a: BASE + '/euridice-v-ls.mp4',
-    b: BASE + '/euridice-v-ms-1.mp4',
-    c: BASE + '/euridice-v-ms-2.mp4',
+    a: 'videos/lora-full.mp4',      // full body
+    b: 'videos/lora-portrait.mp4',  // portrait
+    c: 'videos/lora-overlay.mp4',   // double-exposure layer
   };
+
   const DETAILS = [
-    BASE + '/euridice-h-portrait-lora.mp4',
-    BASE + '/euridice-h-cu-wave.mp4',
-    BASE + '/euridice-h-cu-foam-sea.mp4',
-    BASE + '/euridice-h-cu-feet.mp4',
-    BASE + '/euridice-h-cu-blouse.mp4',
-    BASE + '/euridice-h-cu-footsteps-sea.mp4',
-    BASE + '/euridice-v-cu-footsteps-washed.mp4',
-    BASE + '/euridice-h-cu-feet-foam.mp4',
-    BASE + '/euridice-h-cu-foam.mp4',
-    BASE + '/euridice-h-cu-foam2.mp4',
-    BASE + '/euridice-h-cu-foam3.mp4',
-    BASE + '/euridice-h-cu-foam5.mp4',
-    BASE + '/euridice-h-cu-footsteps.mp4',
-    BASE + '/euridice-h-cu-footsteps-washed2.mp4',
-    BASE + '/euridice-h-cu-footsteps-washed3.mp4',
-    BASE + '/euridice-h-sky.mp4',
+    'videos/detail1.mp4',
+    'videos/detail2.mp4',
+    'videos/detail3.mp4',
+    'videos/detail4.mp4',
+    'videos/detail5.mp4',
   ];
-  const LORA_MARGIN = 0.10;
-  const LORA_WIDTH  = 0.22;
-  const DETAIL_W_FRAC = 0.42;
-  const DETAIL_H_FRAC = 0.48;
+
+  const LORA_MARGIN = 0.10;  // 10% from left/top/bottom
+  const LORA_WIDTH  = 0.22;  // Lora window width as fraction of stage
+  const DETAIL_W_FRAC = 0.21;
+  const DETAIL_H_FRAC = 0.24;
+  const DETAIL_GAP = 10;
+
+  // ═══════════════════════════════════════
+
+  // Cycle: 1 → 2 → 2+3 → 2 → 1 → 0 → 1...
   const LORA_CYCLE = [
     { a:1, b:0, c:0 },
     { a:0, b:1, c:0 },
@@ -90,73 +130,220 @@
     { a:1, b:0, c:0 },
     { a:0, b:0, c:0 },
   ];
+
   let loraState = 0, detailIdx = 0, started = false, hintHidden = false;
-  const stage = document.getElementById('stage');
+  let isLooping = false, isBW = false, isSubs = false;
+
+  const stage   = document.getElementById('stage');
   const loraWin = document.getElementById('lora-window');
-  const vidA = document.getElementById('vid-a');
-  const vidB = document.getElementById('vid-b');
-  const vidC = document.getElementById('vid-c');
-  const hint = document.getElementById('hint');
+  const vidA    = document.getElementById('vid-a');
+  const vidB    = document.getElementById('vid-b');
+  const vidC    = document.getElementById('vid-c');
+  const hint    = document.getElementById('hint');
   const overlay = document.getElementById('start-overlay');
-  vidA.src = LORA.a; vidB.src = LORA.b; vidC.src = LORA.c;
+  const btnLoop = document.getElementById('btn-loop');
+  const btnBW   = document.getElementById('btn-bw');
+  const btnSubs = document.getElementById('btn-subs');
+
+  vidA.src = LORA.a;
+  vidB.src = LORA.b;
+  vidC.src = LORA.c;
+
+  // ── Timecode-synced videos ──
+  const timecodeSyncedVideos = [vidA, vidB, vidC];
+  const timecodeSyncedDetails = new Set();
+
+  // Track which detail sources should sync to timecode
+  const TIMECODE_DETAIL_SRC = 'videos/detail5.mp4'; // euridice-h-portrait-lora
+
+  function syncVideoToAudio(vid) {
+    if (Math.abs(vid.currentTime - audio.currentTime) > 0.3) {
+      vid.currentTime = audio.currentTime;
+    }
+  }
+
+  function syncAllToTimecode() {
+    if (!started) return;
+    timecodeSyncedVideos.forEach(v => {
+      if (!v.paused) syncVideoToAudio(v);
+    });
+    timecodeSyncedDetails.forEach(v => {
+      if (!v.paused) syncVideoToAudio(v);
+    });
+  }
+
+  // Sync on audio timeupdate
+  // ── end timecode sync ──
+
   function resizeStage() {
     const vw = window.innerWidth, vh = window.innerHeight;
     let w, h;
-    if (vw / vh > 16/9) { h = vh; w = h * (16/9); } else { w = vw; h = w * (9/16); }
-    stage.style.width = w + 'px'; stage.style.height = h + 'px';
-    loraWin.style.top    = (h * LORA_MARGIN) + 'px';
-    loraWin.style.left   = (w * LORA_MARGIN) + 'px';
-    loraWin.style.width  = (w * LORA_WIDTH) + 'px';
-    loraWin.style.height = (h * (1 - 2 * LORA_MARGIN)) + 'px';
+    if (vw / vh > 16/9) { h = vh; w = h * (16/9); }
+    else { w = vw; h = w * (9/16); }
+    stage.style.width  = w + 'px';
+    stage.style.height = h + 'px';
+    const top   = h * LORA_MARGIN;
+    const left  = w * LORA_MARGIN;
+    const height = h * (1 - 2 * LORA_MARGIN);
+    const width  = w * LORA_WIDTH;
+    loraWin.style.top    = top    + 'px';
+    loraWin.style.left   = left   + 'px';
+    loraWin.style.width  = width  + 'px';
+    loraWin.style.height = height + 'px';
   }
   resizeStage();
   window.addEventListener('resize', resizeStage);
+
   const audio = new Audio(AUDIO_SRC);
+
+  audio.addEventListener('timeupdate', syncAllToTimecode);
+
+  audio.addEventListener('play', () => {
+    timecodeSyncedVideos.forEach(v => {
+      v.currentTime = audio.currentTime;
+      if (parseFloat(v.style.opacity) > 0) v.play().catch(()=>{});
+    });
+    timecodeSyncedDetails.forEach(v => {
+      v.currentTime = audio.currentTime;
+      v.play().catch(()=>{});
+    });
+  });
+
+  audio.addEventListener('ended', () => {
+    if (isLooping) {
+      audio.currentTime = 0;
+      audio.play().catch(()=>{});
+      // Reset left-panel videos to start
+      timecodeSyncedVideos.forEach(v => { v.currentTime = 0; });
+      timecodeSyncedDetails.forEach(v => { v.currentTime = 0; });
+    }
+  });
+
   function applyLoraState(idx) {
     const s = LORA_CYCLE[idx];
-    vidA.style.opacity = s.a; s.a ? vidA.play().catch(()=>{}) : vidA.pause();
-    vidB.style.opacity = s.b; s.b ? vidB.play().catch(()=>{}) : vidB.pause();
-    vidC.style.opacity = s.c; s.c ? vidC.play().catch(()=>{}) : vidC.pause();
+    vidA.style.opacity = s.a;
+    vidB.style.opacity = s.b;
+    vidC.style.opacity = s.c;
+    if (s.a) { vidA.currentTime = audio.currentTime; vidA.play().catch(()=>{}); } else vidA.pause();
+    if (s.b) { vidB.currentTime = audio.currentTime; vidB.play().catch(()=>{}); } else vidB.pause();
+    if (s.c) { vidC.currentTime = audio.currentTime; vidC.play().catch(()=>{}); } else vidC.pause();
   }
+
   overlay.addEventListener('click', () => {
     overlay.classList.add('hidden');
     audio.play().catch(()=>{});
     applyLoraState(loraState);
     started = true;
   });
+
   loraWin.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!started) return;
     loraState = (loraState + 1) % LORA_CYCLE.length;
     applyLoraState(loraState);
   });
+
+  // ── Placed detail clips tracking for gap enforcement ──
+  const placedClips = [];
+
+  function hasOverlap(left, top, w, h) {
+    for (const c of placedClips) {
+      const noOverlap = left + w + DETAIL_GAP <= c.left || c.left + c.w + DETAIL_GAP <= left
+                     || top + h + DETAIL_GAP <= c.top  || c.top + c.h + DETAIL_GAP <= top;
+      if (!noOverlap) return true;
+    }
+    return false;
+  }
+
+  function nudgePosition(left, top, w, h, rightZoneStart, sw, sh) {
+    // Try small offsets to avoid overlap
+    const offsets = [0, 30, -30, 60, -60, 90, -90, 120, -120];
+    for (const dx of offsets) {
+      for (const dy of offsets) {
+        const nl = Math.max(rightZoneStart, Math.min(left + dx, sw - w));
+        const nt = Math.max(0, Math.min(top + dy, sh - h));
+        if (!hasOverlap(nl, nt, w, h)) return { left: nl, top: nt };
+      }
+    }
+    return { left, top }; // fallback
+  }
+
   stage.addEventListener('click', (e) => {
     if (!started || e.target !== stage) return;
-    const rect = stage.getBoundingClientRect();
+    const rect   = stage.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-    const sw = stage.offsetWidth, sh = stage.offsetHeight;
-    const rightZoneStart = sw * LORA_MARGIN + sw * LORA_WIDTH + 8;
-    if (clickX < rightZoneStart || detailIdx >= DETAILS.length) return;
+    const sw     = stage.offsetWidth;
+    const sh     = stage.offsetHeight;
+    const loraRight     = sw * LORA_MARGIN + sw * LORA_WIDTH;
+    const rightZoneStart = loraRight + 8;
+    if (clickX < rightZoneStart) return;
+    if (detailIdx >= DETAILS.length) return;
     if (!hintHidden) { hint.classList.add('hidden'); hintHidden = true; }
-    const clipW = (sw - rightZoneStart) * DETAIL_W_FRAC;
+
+    const clickY    = e.clientY - rect.top;
+    const rightZoneW = sw - rightZoneStart;
+    const clipW = rightZoneW * DETAIL_W_FRAC;
     const clipH = sh * DETAIL_H_FRAC;
-    let left = Math.max(rightZoneStart, Math.min(clickX - clipW/2, sw - clipW));
-    let top  = Math.max(0, Math.min(clickY - clipH/2, sh - clipH));
-    const src = DETAILS[detailIdx++];
+    let left = clickX - clipW / 2;
+    let top  = clickY - clipH / 2;
+    left = Math.max(rightZoneStart, Math.min(left, sw - clipW));
+    top  = Math.max(0, Math.min(top, sh - clipH));
+
+    // Enforce gap between detail clips
+    const pos = nudgePosition(left, top, clipW, clipH, rightZoneStart, sw, sh);
+    left = pos.left; top = pos.top;
+
+    const src  = DETAILS[detailIdx++];
     const clip = document.createElement('div');
     clip.className = 'clip';
     clip.style.cssText = `width:${clipW}px;height:${clipH}px;left:${left}px;top:${top}px;`;
     const vid = document.createElement('video');
     vid.src = src; vid.loop = true; vid.muted = true; vid.autoplay = true; vid.playsInline = true;
-    clip.appendChild(vid); stage.appendChild(clip);
+    clip.appendChild(vid);
+    stage.appendChild(clip);
     requestAnimationFrame(() => requestAnimationFrame(() => clip.classList.add('visible')));
+
+    // Sync timecoded detail to audio
+    if (src === TIMECODE_DETAIL_SRC) {
+      vid.currentTime = audio.currentTime;
+      timecodeSyncedDetails.add(vid);
+    }
+
     vid.play().catch(()=>{});
+
+    const clipRecord = { left, top, w: clipW, h: clipH };
+    placedClips.push(clipRecord);
+
     clip.addEventListener('click', (ev) => {
       ev.stopPropagation();
       clip.classList.remove('visible');
+      timecodeSyncedDetails.delete(vid);
+      const idx = placedClips.indexOf(clipRecord);
+      if (idx > -1) placedClips.splice(idx, 1);
       setTimeout(() => { vid.pause(); clip.remove(); }, 400);
     });
+  });
+
+  // ── Button: Loop ──
+  btnLoop.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isLooping = !isLooping;
+    btnLoop.classList.toggle('active', isLooping);
+  });
+
+  // ── Button: Black & White ──
+  btnBW.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isBW = !isBW;
+    stage.classList.toggle('grayscale-mode', isBW);
+    btnBW.classList.toggle('active', isBW);
+  });
+
+  // ── Button: Subtitles (placeholder) ──
+  btnSubs.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isSubs = !isSubs;
+    btnSubs.classList.toggle('active', isSubs);
   });
 </script>
 </body>
